@@ -1,1 +1,22 @@
-*.exe
+# Arquivos temporários
+*.class
+*.log
+*.war
+*.ear
+*.jar
+target/
+
+# Arquivos de configuração
+*.iml
+.idea/
+.gradle/
+build/
+
+# Arquivos de dependências
+bin/
+lib/
+
+# Arquivos gerados pelo sistema operacional
+.DS_Store
+Thumbs.db
+.exe
