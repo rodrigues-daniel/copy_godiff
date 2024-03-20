@@ -3,89 +3,93 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
-	// Verifica se o número de argumentos é adequado
-	if len(os.Args) != 3 {
-		fmt.Println("Uso: go run script.go pasta_origem pasta_destino")
-		os.Exit(1)
+	if len(os.Args) < 3 {
+		fmt.Println("Uso: go run main.go <pasta_origem> <pasta_destino>")
+		return
 	}
 
-	// Captura os argumentos da linha de comando
 	origem := os.Args[1]
 	destino := os.Args[2]
 
-	// Verifica se a pasta de origem existe
-	if _, err := os.Stat(origem); os.IsNotExist(err) {
-		fmt.Printf("A pasta de origem '%s' não existe.\n", origem)
-		os.Exit(1)
+	copiados, err := copiarArquivosJava(origem, destino)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	// Verifica se a pasta de destino existe
-	if _, err := os.Stat(destino); os.IsNotExist(err) {
-		// Se a pasta de destino não existe, tenta criá-la
-		if err := os.MkdirAll(destino, 0755); err != nil {
-			fmt.Println("Erro ao criar a pasta de destino:", err)
-			os.Exit(1)
-		}
+	fmt.Println("Arquivos Java copiados com sucesso:")
+	for _, arquivo := range copiados {
+		fmt.Println(arquivo)
+	}
+	fmt.Printf("Total de arquivos copiados: %d\n", len(copiados))
+}
+
+func copiarArquivosJava(origem, destino string) ([]string, error) {
+	// Cria a pasta de destino se ela não existir
+	err := os.MkdirAll(destino, os.ModePerm)
+	if err != nil {
+		return nil, err
 	}
 
-	// Copia o conteúdo da pasta de origem para a pasta de destino
-	err := filepath.WalkDir(origem, func(path string, d fs.DirEntry, err error) error {
+	var copiados []string
+
+	// Percorre recursivamente a pasta de origem
+	err = filepath.Walk(origem, func(caminho string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// Calcula o caminho de destino
-		destPath := filepath.Join(destino, path[len(origem):])
+		// Verifica se é um arquivo Java
+		if !info.IsDir() && strings.HasSuffix(info.Name(), ".java") {
+			// Calcula o caminho relativo do arquivo em relação à pasta de origem
+			caminhoRelativo, err := filepath.Rel(origem, caminho)
+			if err != nil {
+				return err
+			}
 
-		if d.IsDir() {
-			// Se for um diretório, tenta criar na pasta de destino
-			if err := os.MkdirAll(destPath, d.Type().Perm()); err != nil {
+			// Cria o caminho completo do arquivo no destino
+			destinoArquivo := filepath.Join(destino, caminhoRelativo)
+
+			// Cria a pasta de destino se ela não existir
+			pastaDestino := filepath.Dir(destinoArquivo)
+			err = os.MkdirAll(pastaDestino, os.ModePerm)
+			if err != nil {
 				return err
 			}
-		} else {
-			// Se for um arquivo, copia para a pasta de destino
-			if err := copyFile(path, destPath, d.Type().Perm()); err != nil {
+
+			// Abre o arquivo de origem
+			arquivoOrigem, err := os.Open(caminho)
+			if err != nil {
 				return err
 			}
+			defer arquivoOrigem.Close()
+
+			// Cria o arquivo de destino
+			arquivoDestino, err := os.Create(destinoArquivo)
+			if err != nil {
+				return err
+			}
+			defer arquivoDestino.Close()
+
+			// Copia o conteúdo do arquivo de origem para o arquivo de destino
+			_, err = io.Copy(arquivoDestino, arquivoOrigem)
+			if err != nil {
+				return err
+			}
+
+			// Adiciona o nome do arquivo copiado à lista de arquivos copiados
+			copiados = append(copiados, caminhoRelativo)
+			fmt.Println("Arquivo copiado:", caminhoRelativo)
 		}
+
 		return nil
 	})
-	if err != nil {
-		fmt.Println("Erro ao copiar o conteúdo da pasta de origem para a pasta de destino:", err)
-		os.Exit(1)
-	}
 
-	fmt.Println("Cópia concluída com sucesso!")
-}
-
-// Copia um arquivo de origem para um destino
-func copyFile(src, dst string, perm fs.FileMode) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err = io.Copy(out, in); err != nil {
-		return err
-	}
-
-	// Define as permissões do arquivo
-	if err := out.Chmod(perm); err != nil {
-		return err
-	}
-
-	return nil
+	return copiados, err
 }
