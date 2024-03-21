@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -11,33 +12,59 @@ import (
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Uso: go run main.go <pasta_origem> <pasta_destino>")
+		fmt.Println("Uso: go run main.go <pasta_origem> <arquivo_destinos>")
 		return
 	}
 
 	origem := os.Args[1]
-	destino := os.Args[2]
+	arquivoDestinos := os.Args[2]
 
-	copiados, err := copiarArquivosJava(origem, destino)
+	destinos, err := lerDestinos(arquivoDestinos)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Arquivos Java copiados com sucesso:")
-	for _, arquivo := range copiados {
-		fmt.Println(arquivo)
+	for _, destino := range destinos {
+		err := copiarArquivosJava(origem, destino)
+		if err != nil {
+			log.Printf("Erro ao copiar arquivos para %s: %v\n", destino, err)
+		} else {
+			fmt.Printf("Arquivos Java copiados com sucesso para %s!\n", destino)
+		}
 	}
-	fmt.Printf("Total de arquivos copiados: %d\n", len(copiados))
 }
 
-func copiarArquivosJava(origem, destino string) ([]string, error) {
-	// Cria a pasta de destino se ela não existir
-	err := os.MkdirAll(destino, os.ModePerm)
+func lerDestinos(arquivoDestinos string) ([]string, error) {
+	file, err := os.Open(arquivoDestinos)
 	if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 
-	var copiados []string
+	var destinos []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		destino := strings.TrimSpace(scanner.Text())
+		if destino != "" {
+			destinos = append(destinos, destino)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return destinos, nil
+}
+
+func copiarArquivosJava(origem, destino string) error {
+	// Cria a pasta de destino se ela não existir
+	err := os.MkdirAll(destino, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	//var copiados []string
 
 	// Percorre recursivamente a pasta de origem
 	err = filepath.Walk(origem, func(caminho string, info os.FileInfo, err error) error {
@@ -84,12 +111,12 @@ func copiarArquivosJava(origem, destino string) ([]string, error) {
 			}
 
 			// Adiciona o nome do arquivo copiado à lista de arquivos copiados
-			copiados = append(copiados, caminhoRelativo)
+			//copiados = append(copiados, caminhoRelativo)
 			fmt.Println("Arquivo copiado:", caminhoRelativo)
 		}
 
 		return nil
 	})
 
-	return copiados, err
+	return err
 }
